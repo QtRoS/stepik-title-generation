@@ -20,8 +20,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # %%
-# Turn a Unicode string to plain ASCII, thanks to
-# https://stackoverflow.com/a/518232/2809427
+# Turn a Unicode string to plain ASCII, thanks to https://stackoverflow.com/a/518232/2809427
 def unicodeToAscii(s):
     return ''.join(
         c for c in unicodedata.normalize('NFD', s)
@@ -57,6 +56,7 @@ def preprocess(dataframe: pd.DataFrame, train=True):
 df_train_pr = preprocess(df_train)
 df_test_pr = preprocess(df_test, train=False)
 
+
 #%%
 
 pairs = []
@@ -73,6 +73,22 @@ tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 special_tokens_dict = {'bos_token': '[BOS]', 'eos_token': '[EOS]'}
 tokenizer.add_special_tokens(special_tokens_dict)
 
+
+# %%
+
+SOS_token = tokenizer.bos_token_id
+EOS_token = tokenizer.eos_token_id
+
+# %%
+
+dfc = df_train_pr.copy()
+dfc['abstract_wc'] = dfc['abstract'].apply(lambda x: len(x.split(' ')))
+dfc['title_wc'] = dfc['title'].apply(lambda x: len(x.split(' ')))
+dfc['abstract_len'] = dfc['abstract'].apply(lambda x: len(x))
+dfc['title_len'] = dfc['title'].apply(lambda x: len(x))
+dfc.describe()
+del dfc
+
 #%%
 
 tokenizer.special_tokens_map, \
@@ -81,9 +97,7 @@ tokenizer.special_tokens_map, \
 
 # %%
 
-SOS_token = tokenizer.bos_token_id
-EOS_token = tokenizer.eos_token_id
-
+tokenizer.vocab_size
 
 # %%
 
@@ -192,7 +206,8 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     loss = 0
 
-    for ei in range(input_length): # TODO max_length?
+    print(f'Train encoder...')
+    for ei in range(max_length): # TODO max_length?
         encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
         encoder_outputs[ei] = encoder_output[0, 0]
 
@@ -200,6 +215,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     decoder_hidden = encoder_hidden
     use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
 
+    print(f'Train decoder use_teacher_forcing={use_teacher_forcing}...')
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
         for di in range(target_length):
@@ -211,8 +227,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     else:
         # Without teacher forcing: use its own predictions as the next input
         for di in range(target_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(
-                decoder_input, decoder_hidden, encoder_outputs)
+            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
             topv, topi = decoder_output.topk(1)
             decoder_input = topi.squeeze().detach()  # detach from history as input
 
@@ -254,18 +269,20 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
     plot_loss_total = 0  # Reset every plot_every
+    print(f'Training for {n_iters} iters...')
 
+    # TODO Adam?
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    training_pairs = [tensorsFromPair(random.choice(pairs))
-                      for i in range(n_iters)]
+    # training_pairs = [tensorsFromPair(random.choice(pairs)) for i in range(n_iters)]
     criterion = nn.NLLLoss()
 
     for iter in range(1, n_iters + 1):
-        training_pair = training_pairs[iter - 1]
+        training_pair = tensorsFromPair(random.choice(pairs)) #training_pairs[iter - 1]
         input_tensor = training_pair[0]
         target_tensor = training_pair[1]
 
+        print(f'Iteration {iter} before train...')
         loss = train(input_tensor, target_tensor, encoder,
                      decoder, encoder_optimizer, decoder_optimizer, criterion)
         print_loss_total += loss
@@ -312,9 +329,8 @@ def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
 
         encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
 
-        for ei in range(input_length):
-            encoder_output, encoder_hidden = encoder(input_tensor[ei],
-                                                     encoder_hidden)
+        for ei in range(max_length): # TODO max_length?
+            encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
             encoder_outputs[ei] += encoder_output[0, 0]
 
         decoder_input = torch.tensor([[SOS_token]], device=device)  # SOS
@@ -358,9 +374,11 @@ def evaluateRandomly(encoder, decoder, n=10):
 
 # %%
 
+vocab_size = tokenizer.vocab_size + 2
 hidden_size = 256
-encoder1 = EncoderRNN(tokenizer.vocab_size, hidden_size).to(device)
-attn_decoder1 = AttnDecoderRNN(hidden_size, tokenizer.vocab_size, dropout_p=0.1).to(device)
+
+encoder1 = EncoderRNN(vocab_size, hidden_size).to(device)
+attn_decoder1 = AttnDecoderRNN(hidden_size, vocab_size, dropout_p=0.1).to(device)
 
 trainIters(encoder1, attn_decoder1, 75000, print_every=100) # 500
 
