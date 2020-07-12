@@ -132,7 +132,7 @@ class EncoderRNN(nn.Module):
 
 # %%
 
-MAX_LENGTH = 30
+MAX_LENGTH = 100
 
 class AttnDecoderRNN(nn.Module):
     def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=MAX_LENGTH):
@@ -206,8 +206,9 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     loss = 0
 
-    print(f'Train encoder...')
-    for ei in range(max_length): # TODO max_length?
+    # print(f'Train encoder...')
+    emb_count = min(input_length, max_length)
+    for ei in range(emb_count): # TODO max_length?
         encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
         encoder_outputs[ei] = encoder_output[0, 0]
 
@@ -215,7 +216,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     decoder_hidden = encoder_hidden
     use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
 
-    print(f'Train decoder use_teacher_forcing={use_teacher_forcing}...')
+    # print(f'Train decoder use_teacher_forcing={use_teacher_forcing}...')
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
         for di in range(target_length):
@@ -264,7 +265,7 @@ def timeSince(since, percent):
 
 # %%
 
-def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
+def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, learning_rate=0.01, prepare_pairs=True):
     start = time.time()
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
@@ -274,15 +275,17 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
     # TODO Adam?
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    # training_pairs = [tensorsFromPair(random.choice(pairs)) for i in range(n_iters)]
+    if prepare_pairs:
+        print(f'Preparing {n_iters} training pairs...')
+        training_pairs = [tensorsFromPair(random.choice(pairs)) for i in range(n_iters)]
     criterion = nn.NLLLoss()
 
     for iter in range(1, n_iters + 1):
-        training_pair = tensorsFromPair(random.choice(pairs)) #training_pairs[iter - 1]
+        training_pair = training_pairs[iter - 1] if prepare_pairs else tensorsFromPair(random.choice(pairs))
         input_tensor = training_pair[0]
         target_tensor = training_pair[1]
 
-        print(f'Iteration {iter} before train...')
+        # print(f'Iteration {iter} before train...')
         loss = train(input_tensor, target_tensor, encoder,
                      decoder, encoder_optimizer, decoder_optimizer, criterion)
         print_loss_total += loss
@@ -291,7 +294,7 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
         if iter % print_every == 0:
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
-            print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
+            print('%s (%d %d%%) Loss: %.4f' % (timeSince(start, iter / n_iters),
                                          iter, iter / n_iters * 100, print_loss_avg))
 
         if iter % plot_every == 0:
@@ -329,7 +332,8 @@ def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
 
         encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
 
-        for ei in range(max_length): # TODO max_length?
+        emb_count = min(input_length, max_length)
+        for ei in range(emb_count): # TODO max_length?
             encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
             encoder_outputs[ei] += encoder_output[0, 0]
 
@@ -380,7 +384,7 @@ hidden_size = 256
 encoder1 = EncoderRNN(vocab_size, hidden_size).to(device)
 attn_decoder1 = AttnDecoderRNN(hidden_size, vocab_size, dropout_p=0.1).to(device)
 
-trainIters(encoder1, attn_decoder1, 75000, print_every=100) # 500
+trainIters(encoder1, attn_decoder1, 5000, print_every=50) # 75000 500
 
 # %%
 
