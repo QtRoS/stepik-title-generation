@@ -153,8 +153,7 @@ class AttnDecoderRNN(nn.Module):
         embedded = self.embedding(input).view(1, 1, -1)
         embedded = self.dropout(embedded)
 
-        attn_weights = F.softmax(
-            self.attn(torch.cat((embedded[0], hidden[0]), 1)), dim=1)
+        attn_weights = F.softmax(self.attn(torch.cat((embedded[0], hidden[0]), 1)), dim=1)
         attn_applied = torch.bmm(attn_weights.unsqueeze(0),
                                  encoder_outputs.unsqueeze(0))
 
@@ -208,7 +207,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     # print(f'Train encoder...')
     emb_count = min(input_length, max_length)
-    for ei in range(emb_count): # TODO max_length?
+    for ei in range(emb_count):
         encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
         encoder_outputs[ei] = encoder_output[0, 0]
 
@@ -220,11 +219,9 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
         for di in range(target_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(
-                decoder_input, decoder_hidden, encoder_outputs)
+            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
             loss += criterion(decoder_output, target_tensor[di])
             decoder_input = target_tensor[di]  # Teacher forcing
-
     else:
         # Without teacher forcing: use its own predictions as the next input
         for di in range(target_length):
@@ -272,9 +269,11 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
     plot_loss_total = 0  # Reset every plot_every
     print(f'Training for {n_iters} iters...')
 
-    # TODO Adam?
-    encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
-    decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
+    # TODO Adam? RMSprop?
+    # encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
+    # decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
+    encoder_optimizer = optim.Adam(encoder.parameters())
+    decoder_optimizer = optim.Adam(decoder.parameters())
     if prepare_pairs:
         print(f'Preparing {n_iters} training pairs...')
         training_pairs = [tensorsFromPair(random.choice(pairs)) for i in range(n_iters)]
@@ -333,7 +332,7 @@ def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
         encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
 
         emb_count = min(input_length, max_length)
-        for ei in range(emb_count): # TODO max_length?
+        for ei in range(emb_count):
             encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
             encoder_outputs[ei] += encoder_output[0, 0]
 
@@ -345,8 +344,7 @@ def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
         decoder_attentions = torch.zeros(max_length, max_length)
 
         for di in range(max_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(
-                decoder_input, decoder_hidden, encoder_outputs)
+            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
             decoder_attentions[di] = decoder_attention.data
             topv, topi = decoder_output.data.topk(1)
             if topi.item() == EOS_token:
@@ -388,9 +386,18 @@ trainIters(encoder1, attn_decoder1, 5000, print_every=50) # 75000 500
 
 # %%
 
+trainIters(encoder1, attn_decoder1, 30000, print_every=100) # 75000 500
+
+# %%
+
 evaluateRandomly(encoder1, attn_decoder1)
 
 # %%
+
+import joblib
+
+obj = {'encoder1': encoder1, 'attn_decoder1': attn_decoder1}
+joblib.dump(obj, 'temp_res_2.joblib')
 
 # %%
 

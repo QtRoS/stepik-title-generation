@@ -20,7 +20,7 @@ summarize = pipeline('summarization')
 
 #%%
 
-MAX_LEN = 18 # TODO FROM TOKENIZER
+MAX_LEN = 16 # TODO FROM TOKENIZER
 test_titles = []
 for abstract in tqdm(test['abstract']):
     summarized_text = summarize(abstract, max_length=MAX_LEN)
@@ -40,7 +40,7 @@ test_pred.to_csv('test_pred.csv', index=None)
 
 from create_submission import generate_csv
 
-generate_csv('test_pred.csv', 'submission_v3.csv', os.path.join(DATA_PATH, 'vocs.pkl'))
+generate_csv('test_pred.csv', 'submission_v5.csv', os.path.join(DATA_PATH, 'vocs.pkl'))
 
 #%% 
 
@@ -64,9 +64,11 @@ generate_csv('test_pred.csv', 'submission_v3.csv', os.path.join(DATA_PATH, 'vocs
 
 # %%
 
-offset = 110
+MAX_LEN = 16
+offset = 160
 for i in range(10):
-    pred = summarize(train['abstract'][offset+i], max_length=MAX_LEN)
+    pred = summarize(train['abstract'][offset+i], max_length=MAX_LEN,\
+        num_beans=6, length_penalty=2.0, early_stopping=True)
     pred = pred[0]['summary_text']
     orig = train['title'][offset+i]
     print(f'ORIG: {orig}\nPRED: {pred}\n')

@@ -22,11 +22,11 @@ def generate_csv(input_file='predicted_titles.csv', output_file='submission.csv'
 
     with open(output_file, 'w') as res_file:
         res_file.write('Id,Predict\n')
-
+        
     output_idx = 0
     for row_idx, row in data.iterrows():
         trg = row['title']
-        print('trg', trg)
+        trg = str(trg)
         trg = trg.translate(str.maketrans('', '', string.punctuation)).lower().split()
         trg.extend(['_'.join(ngram) for ngram in list(ngrams(trg, 2)) + list(ngrams(trg, 3))])
         
